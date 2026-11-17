@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="[https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/MADI_logo.png/240px-MADI_logo.png](https://s.rbk.ru/v1_companies_s3/media/trademarks/100f4d91-26e2-4409-9689-c91b8539bed5.jpg)" alt="MADI University" width="120">
+    <img src="https://s.rbk.ru/v1_companies_s3/media/trademarks/100f4d91-26e2-4409-9689-c91b8539bed5.jpg" alt="MADI University" width="120">
 </div>
 
 <h1 align="center">
