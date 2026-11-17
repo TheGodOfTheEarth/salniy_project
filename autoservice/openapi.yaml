@@ -1,0 +1,643 @@
+openapi: 3.0.3
+info:
+   title: AutoService API (Full Lifecycle)
+   description: Полноценное API для управления автосервисом, покрывающее все бизнес-сценарии (ПИ-1 - ПИ-10).
+   version: 2.0.0
+servers:
+   - url: http://localhost:5000/api/v1
+
+paths:
+   # --- 1. АУТЕНТИФИКАЦИЯ И ПРОФИЛЬ ---
+   /auth/register:
+      post:
+         summary: Регистрация нового клиента
+         tags: [Auth]
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     $ref: '#/components/schemas/RegisterRequest'
+         responses:
+            '201':
+               description: Успешная регистрация
+
+   /auth/login:
+      post:
+         summary: Авторизация пользователя (все роли)
+         tags: [Auth]
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     type: object
+                     required: [email, password]
+                     properties:
+                        email: { type: string, format: email }
+                        password: { type: string, format: password }
+         responses:
+            '200':
+               description: Успешный вход, возвращает JWT токен и роль
+
+   /profile:
+      get:
+         summary: Получить свой профиль
+         tags: [Auth]
+         security: [{ bearerAuth: [] }]
+         responses:
+            '200':
+               description: Данные профиля
+      put:
+         summary: Обновить свои данные (ФИО, телефон, email)
+         tags: [Auth]
+         security: [{ bearerAuth: [] }]
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     $ref: '#/components/schemas/UpdateProfileRequest'
+         responses:
+            '200':
+               description: Профиль обновлен
+      delete:
+         summary: Удалить свой аккаунт (Soft Delete - is_active = false)
+         tags: [Auth]
+         security: [{ bearerAuth: [] }]
+         responses:
+            '204':
+               description: Аккаунт деактивирован
+
+   # --- 2. КЛИЕНТ: МАШИНЫ И ЗАПИСИ ---
+   /profile/my-cars:
+      get:
+         summary: Получить список своих автомобилей
+         tags: [Client]
+         security: [{ bearerAuth: [] }]
+         responses:
+            '200':
+               description: Список машин
+      post:
+         summary: Добавить автомобиль в гараж (VIN и номер обязательны)
+         tags: [Client]
+         security: [{ bearerAuth: [] }]
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     $ref: '#/components/schemas/CreateCarRequest'
+         responses:
+            '201':
+               description: Автомобиль добавлен
+
+   /profile/my-cars/{id}:
+      put:
+         summary: Обновить данные своего автомобиля
+         tags: [Client]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: id
+              in: path
+              required: true
+              schema: { type: integer }
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     $ref: '#/components/schemas/CreateCarRequest'
+         responses:
+            '200':
+               description: Данные обновлены
+      delete:
+         summary: Удалить автомобиль из гаража
+         tags: [Client]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: id
+              in: path
+              required: true
+              schema: { type: integer }
+         responses:
+            '204':
+               description: Автомобиль удален
+
+   /appointments/available-slots:
+      get:
+         summary: Получить свободное время для записи
+         tags: [Client]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: date
+              in: query
+              required: true
+              schema: { type: string, format: date }
+            - name: service_id
+              in: query
+              required: true
+              schema: { type: integer }
+         responses:
+            '200':
+               description: Список времени
+
+   /appointments:
+      post:
+         summary: ПИ-1. Создать запись на ремонт
+         tags: [Client]
+         security: [{ bearerAuth: [] }]
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     $ref: '#/components/schemas/CreateAppointmentRequest'
+         responses:
+            '201':
+               description: Запись создана
+      get:
+         summary: Получить свои записи
+         tags: [Client]
+         security: [{ bearerAuth: [] }]
+         responses:
+            '200':
+               description: Список записей
+
+   /appointments/{id}:
+      delete:
+         summary: Отменить свою запись (Только если статус pending)
+         tags: [Client]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: id
+              in: path
+              required: true
+              schema: { type: integer }
+         responses:
+            '204':
+               description: Запись отменена
+
+   # --- 3. ИСТОРИЯ И СТАТУСЫ (КЛИЕНТ + МАСТЕР) ---
+   /cars/{identifier}/history:
+      get:
+         summary: ПИ-2. История ремонтов (VIN или Госномер)
+         tags: [Client, Master]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: identifier
+              in: path
+              required: true
+              schema: { type: string }
+         responses:
+            '200':
+               description: История ремонтов
+
+   /work-orders/{id}:
+      get:
+         summary: ПИ-3, ПИ-4. Получить детали заказ-наряда (статус, стоимость, работы, запчасти)
+         tags: [Client, Master]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: id
+              in: path
+              required: true
+              schema: { type: integer }
+         responses:
+            '200':
+               description: Детали заказа
+               content:
+                  application/json:
+                     schema:
+                        $ref: '#/components/schemas/WorkOrderDetails'
+
+   # --- 4. МАСТЕР: КЛИЕНТЫ И ЗАКАЗ-НАРЯДЫ ---
+   /master/clients/search:
+      get:
+         summary: ПИ-8. Найти клиента по телефону или номеру авто
+         tags: [Master]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: query
+              in: query
+              required: true
+              schema: { type: string }
+         responses:
+            '200':
+               description: Клиенты и их машины
+
+   /master/clients-with-cars:
+      post:
+         summary: ПИ-5. Создать карточку клиента и авто
+         tags: [Master]
+         security: [{ bearerAuth: [] }]
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     $ref: '#/components/schemas/CreateClientWithCarRequest'
+         responses:
+            '201':
+               description: Клиент и авто созданы
+
+   /master/work-orders:
+      post:
+         summary: ПИ-6. Создать заказ-наряд (работы + запчасти)
+         tags: [Master]
+         security: [{ bearerAuth: [] }]
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     $ref: '#/components/schemas/CreateWorkOrderRequest'
+         responses:
+            '201':
+               description: Заказ создан, сумма рассчитана
+
+   /master/work-orders/{id}/status:
+      patch:
+         summary: ПИ-7. Изменить статус заказ-наряда
+         tags: [Master]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: id
+              in: path
+              required: true
+              schema: { type: integer }
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     type: object
+                     required: [status]
+                     properties:
+                        status:
+                           type: string
+                           enum:
+                              [
+                                 created,
+                                 in_progress,
+                                 waiting_parts,
+                                 ready,
+                                 closed,
+                              ]
+         responses:
+            '200':
+               description: Статус обновлен
+
+   /master/work-orders/{id}/mechanic:
+      patch:
+         summary: ПИ-9. Назначить автомеханика
+         tags: [Master]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: id
+              in: path
+              required: true
+              schema: { type: integer }
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     type: object
+                     required: [mechanic_id]
+                     properties:
+                        mechanic_id: { type: integer }
+         responses:
+            '200':
+               description: Механик назначен
+
+   # --- 5. МАСТЕР: УПРАВЛЕНИЕ СКЛАДОМ И УСЛУГАМИ ---
+   /master/parts:
+      get:
+         summary: Посмотреть склад запчастей
+         tags: [Master]
+         security: [{ bearerAuth: [] }]
+         responses:
+            '200':
+               description: Список запчастей
+      post:
+         summary: Добавить новую запчасть в каталог (заказ поставщику)
+         tags: [Master]
+         security: [{ bearerAuth: [] }]
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     $ref: '#/components/schemas/PartRequest'
+         responses:
+            '201':
+               description: Запчасть добавлена
+
+   /master/parts/{id}/receive:
+      patch:
+         summary: Оприходовать запчасть на склад (увеличить остаток)
+         tags: [Master]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: id
+              in: path
+              required: true
+              schema: { type: integer }
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     type: object
+                     required: [quantity]
+                     properties:
+                        quantity: { type: integer, minimum: 1 }
+         responses:
+            '200':
+               description: Остаток увеличен
+
+   /master/services:
+      get:
+         summary: Посмотреть прайс-лист услуг
+         tags: [Master, Public]
+         responses:
+            '200':
+               description: Список услуг
+      post:
+         summary: Добавить новую услугу в прайс
+         tags: [Master]
+         security: [{ bearerAuth: [] }]
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     $ref: '#/components/schemas/ServiceRequest'
+         responses:
+            '201':
+               description: Услуга добавлена
+
+   # --- 6. АДМИН: ПОЛНОЕ УПРАВЛЕНИЕ ---
+   /admin/dashboard/bays-schedule:
+      get:
+         summary: ПИ-10. Календарь загрузки боксов на дату
+         tags: [Admin]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: date
+              in: query
+              required: true
+              schema: { type: string, format: date }
+         responses:
+            '200':
+               description: Расписание
+
+   /admin/users:
+      get:
+         summary: Получить список пользователей (с фильтром по роли)
+         tags: [Admin]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: role
+              in: query
+              schema: { type: string, enum: [client, master, admin] }
+         responses:
+            '200':
+               description: Список пользователей
+
+   /admin/users/{id}/role:
+      patch:
+         summary: Изменить роль пользователя (Только клиент <-> мастер)
+         tags: [Admin]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: id
+              in: path
+              required: true
+              schema: { type: integer }
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     type: object
+                     required: [new_role]
+                     properties:
+                        new_role: { type: string, enum: [client, master] }
+         responses:
+            '200':
+               description: Роль изменена
+            '403':
+               description: Нельзя менять роль админа
+
+   /admin/appointments:
+      get:
+         summary: Получить все записи в системе
+         tags: [Admin]
+         security: [{ bearerAuth: [] }]
+         responses:
+            '200':
+               description: Все записи
+
+   /admin/appointments/{id}:
+      put:
+         summary: Принудительно изменить запись клиента
+         tags: [Admin]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: id
+              in: path
+              required: true
+              schema: { type: integer }
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     $ref: '#/components/schemas/CreateAppointmentRequest'
+         responses:
+            '200':
+               description: Запись обновлена
+      delete:
+         summary: Удалить запись клиента
+         tags: [Admin]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: id
+              in: path
+              required: true
+              schema: { type: integer }
+         responses:
+            '204':
+               description: Запись удалена
+
+   /admin/bays:
+      get:
+         summary: Список ремонтных боксов
+         tags: [Admin]
+         security: [{ bearerAuth: [] }]
+         responses:
+            '200':
+               description: Список боксов
+      post:
+         summary: Добавить новый бокс
+         tags: [Admin]
+         security: [{ bearerAuth: [] }]
+         requestBody:
+            required: true
+            content:
+               application/json:
+                  schema:
+                     $ref: '#/components/schemas/BayRequest'
+         responses:
+            '201':
+               description: Бокс добавлен
+
+   /admin/bays/{id}:
+      delete:
+         summary: Удалить бокс
+         tags: [Admin]
+         security: [{ bearerAuth: [] }]
+         parameters:
+            - name: id
+              in: path
+              required: true
+              schema: { type: integer }
+         responses:
+            '204':
+               description: Бокс удален
+
+components:
+   securitySchemes:
+      bearerAuth:
+         type: http
+         scheme: bearer
+         bearerFormat: JWT
+
+   schemas:
+      RegisterRequest:
+         type: object
+         required: [email, password, full_name, phone]
+         properties:
+            email: { type: string }
+            password: { type: string }
+            full_name: { type: string }
+            phone: { type: string }
+
+      UpdateProfileRequest:
+         type: object
+         properties:
+            full_name: { type: string }
+            phone: { type: string }
+            email: { type: string }
+
+      CreateCarRequest:
+         type: object
+         required: [brand, model, year, license_plate, vin]
+         properties:
+            brand: { type: string }
+            model: { type: string }
+            year: { type: integer }
+            license_plate: { type: string }
+            vin: { type: string, minLength: 17, maxLength: 17 }
+
+      CreateAppointmentRequest:
+         type: object
+         required: [car_id, service_id, desired_date, desired_time]
+         properties:
+            car_id: { type: integer }
+            service_id: { type: integer }
+            desired_date: { type: string, format: date }
+            desired_time: { type: string, format: time }
+            comment: { type: string }
+
+      CreateClientWithCarRequest:
+         type: object
+         required:
+            [
+               full_name,
+               phone,
+               car_brand,
+               car_model,
+               car_year,
+               license_plate,
+               vin,
+            ]
+         properties:
+            full_name: { type: string }
+            phone: { type: string }
+            email: { type: string }
+            car_brand: { type: string }
+            car_model: { type: string }
+            car_year: { type: integer }
+            license_plate: { type: string }
+            vin: { type: string }
+
+      CreateWorkOrderRequest:
+         type: object
+         required: [client_id, car_id, description, services]
+         properties:
+            client_id: { type: integer }
+            car_id: { type: integer }
+            description: { type: string }
+            services:
+               type: array
+               items:
+                  type: object
+                  properties:
+                     service_id: { type: integer }
+                     quantity: { type: integer }
+            parts:
+               type: array
+               items:
+                  type: object
+                  properties:
+                     part_id: { type: integer }
+                     quantity: { type: integer }
+
+      WorkOrderDetails:
+         type: object
+         properties:
+            id: { type: integer }
+            status: { type: string }
+            description: { type: string }
+            total_amount: { type: number }
+            services:
+               type: array
+               items:
+                  type: object
+                  properties:
+                     service_name: { type: string }
+                     price: { type: number }
+            parts:
+               type: array
+               items:
+                  type: object
+                  properties:
+                     part_name: { type: string }
+                     price: { type: number }
+
+      PartRequest:
+         type: object
+         required: [name, article, price]
+         properties:
+            name: { type: string }
+            article: { type: string }
+            price: { type: number }
+            stock_quantity: { type: integer }
+
+      ServiceRequest:
+         type: object
+         required: [name, price, duration_min]
+         properties:
+            name: { type: string }
+            price: { type: number }
+            duration_min: { type: integer }
+
+      BayRequest:
+         type: object
+         required: [name]
+         properties:
+            name: { type: string }
+            description: { type: string }

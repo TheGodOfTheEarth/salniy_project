@@ -1,0 +1,17 @@
+# Игнорируем папки сборки
+bin/
+obj/
+out/
+
+# Игнорируем настройки IDE (Visual Studio / Rider / VS Code)
+.vs/
+.idea/
+.vscode/
+
+# Игнорируем локальные настройки пользователя
+*.user
+*.suo
+
+# Игнорируем файлы окружения и секреты (если будешь их использовать)
+.env
+appsettings.Development.json
